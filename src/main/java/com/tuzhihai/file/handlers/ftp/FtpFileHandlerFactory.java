@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * @author: zhihai.tu
- * @create: 2018/8/6
+ * create: 2018/8/6
  */
 @Component
 public class FtpFileHandlerFactory implements FileHandlerFactory<FtpFileHandler> {

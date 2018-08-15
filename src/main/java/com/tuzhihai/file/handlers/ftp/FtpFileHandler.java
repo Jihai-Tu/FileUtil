@@ -13,7 +13,7 @@ import org.apache.commons.net.ftp.FTPReply;
 
 /**
  * @author: zhihai.tu
- * @create: 2018/8/6
+ * create: 2018/8/6
  */
 @Slf4j
 public class FtpFileHandler implements FileHandler {

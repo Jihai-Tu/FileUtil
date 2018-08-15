@@ -6,7 +6,7 @@ import java.util.List;
 
 /**
  * @author: zhihai.tu
- * @create: 2018/8/6
+ * create: 2018/8/6
  */
 public interface FileHandler {
     /**

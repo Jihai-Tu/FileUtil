@@ -5,7 +5,7 @@ import org.springframework.context.annotation.Configuration;
 
 /**
  * @author: zhihai.tu
- * @create: 2018/8/6
+ * create: 2018/8/6
  */
 
 @Configuration

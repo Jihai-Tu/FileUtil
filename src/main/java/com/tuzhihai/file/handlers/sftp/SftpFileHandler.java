@@ -15,7 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * @author: zhihai.tu
- * @create: 2018/8/6
+ * create: 2018/8/6
  */
 @Slf4j
 public class SftpFileHandler implements FileHandler {
