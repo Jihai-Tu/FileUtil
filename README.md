@@ -34,7 +34,7 @@ try {
 String filePath = baseParaService.getValue("account.service.file","uploadPath");
 String backupFilePath = baseParaService.getValue("account.service.file","backup");
 String fileName = baseParaService.getValue("account.service.file","export.name");
-List<String> headerList = Arrays.asList("ID", "平台", "交易对", "价格", "数量", "时间", "类型", "原平台ID");
+List<String> headerList = Arrays.asList("ID", "platform", "symbol", "price", "amount", "time", "type", "trade_id");
 try {
     String tempFilePath = PoiUtils.writeXLSX(list,backupFilePath,fileName,Trade.class,headerList);
     InputStream inputStream = new FileInputStream(tempFilePath);
