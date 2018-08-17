@@ -398,5 +398,6 @@ public class FileUtil {
 
         // 清除文件第一行
         //clearFileFirstLineInPath(filePath);
+        
     }
 }
