@@ -21,78 +21,92 @@
  */
 
 package com.tuzhihai.file.util;
+/*
+ * Copyright (c) 2018-2025 tuzhihai(涂志海) All Rights Reserved
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
 
-import java.io.*;
-import java.lang.reflect.Field;
-import java.util.ArrayList;
-import java.util.List;
 
+import cn.hutool.core.date.DateUtil;
+import org.apache.commons.beanutils.ConvertUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.poi.hssf.usermodel.HSSFWorkbook;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import java.io.*;
+import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * @author: zhihai.tu
  * create: 2018/8/6
  */
-public class PoiUtils {
+public class PoiUtils{
     public static final String XLSX_SUFFIX = ".xlsx";
     public static final String XLS_SUFFIX = ".xls";
-
     public PoiUtils() {
     }
 
-    public static <T> List<T> readExcel(Workbook wb, int sheetNo, int ignore, Class<T> tClass) throws IOException {
+    public static <T> List<T> readExcel(Workbook wb, int sheetNo, int ignore, Class<T> tClass) throws Exception {
         Sheet hs = wb.getSheetAt(sheetNo);
         List<T> list = new ArrayList(200);
-        int rowNo = hs.getPhysicalNumberOfRows();
-
+        int totalRowNum = hs.getPhysicalNumberOfRows();
         try {
-            for(int rowi = ignore; rowi < rowNo; ++rowi) {
-                Row row = hs.getRow(rowi);
+            Row sheetHeader = hs.getRow(0);
+            for(int rowIndex = ignore; rowIndex < totalRowNum; ++rowIndex) {
+                Row row = hs.getRow(rowIndex);
                 if (row == null) {
                     break;
                 }
-
                 int cellIndex = row.getPhysicalNumberOfCells();
-                Field[] fields = tClass.getDeclaredFields();
                 T t = tClass.newInstance();
-
                 for(int i = 0; i < cellIndex; ++i) {
-                    Field curField = fields[i];
-                    curField.setAccessible(true);
                     Cell cell = row.getCell(i);
-                    if (cell != null) {
-                        switch(cell.getCellTypeEnum()) {
-                            case NUMERIC:
-                                double tmp = cell.getNumericCellValue();
-                                if (tmp % 1.0D == 0.0D) {
-                                    curField.set(t, String.valueOf((long)tmp));
-                                } else {
-                                    curField.set(t, String.valueOf(tmp));
-                                }
-                                break;
-                            case STRING:
-                                curField.set(t, cell.getStringCellValue());
-                                break;
-                            case BOOLEAN:
-                                curField.set(t, cell.getBooleanCellValue());
-                                break;
-                            case FORMULA:
-                                curField.set(t, cell.getCellFormula());
-                        }
-                    }
-                }
+                    String cellValue = cell.getStringCellValue();
 
+                    String fileName = sheetHeader.getCell(i).getStringCellValue();
+                    Field curField = tClass.getDeclaredField(lineToHump(fileName));
+                    Class fieldTypeClass = curField.getType();
+                    if(curField == null || StringUtils.isEmpty(cellValue)){
+                        continue;
+                    }
+                    curField.setAccessible(true);
+                    Object value;
+                    if(fieldTypeClass.getName().equals("java.util.Date")){
+                        value = DateUtil.parse(cellValue).toJdkDate();
+                    }else {
+                        value = ConvertUtils.convert(cellValue,fieldTypeClass);
+                    }
+                    curField.set(t, value);
+                }
                 list.add(t);
             }
-        } catch (Exception var17) {
-            System.out.println("java");
+        } catch (Exception e) {
+            throw e;
         }
-
         return list;
     }
 
@@ -169,13 +183,48 @@ public class PoiUtils {
         return writeExcel(workbook, src, path, filename, ".xlsx", tClass, header);
     }
 
-    public static <T> List<T> readXLS(InputStream src, int sheetNo, int ignore, Class<T> tClass) throws IOException {
+    public static <T> List<T> readXLS(InputStream src, int sheetNo, int ignore, Class<T> tClass) throws Exception {
         Workbook workbook = new HSSFWorkbook(src);
         return readExcel(workbook, sheetNo, ignore, tClass);
     }
 
-    public static <T> List<T> readXLSX(InputStream src, int sheetNo, int ignore, Class<T> tClass) throws IOException {
+    public static <T> List<T> readXLSX(InputStream src, int sheetNo, int ignore, Class<T> tClass) throws Exception {
         Workbook workbook = new XSSFWorkbook(src);
         return readExcel(workbook, sheetNo, ignore, tClass);
     }
+
+
+    /**
+     * 驼峰转下划线
+     * @param str
+     * @return
+     */
+    private static Pattern humpPattern = Pattern.compile("[A-Z]");
+    private static String humpToLine(String str) {
+        Matcher matcher = humpPattern.matcher(str);
+        StringBuffer sb = new StringBuffer();
+        while (matcher.find()) {
+            matcher.appendReplacement(sb, "_" + matcher.group(0).toLowerCase());
+        }
+        matcher.appendTail(sb);
+        return sb.toString();
+    }
+
+
+    /**
+     * 下划线转驼峰
+     */
+    private static Pattern linePattern = Pattern.compile("_(\\w)");
+    private static String lineToHump(String str) {
+        str = str.toLowerCase();
+        Matcher matcher = linePattern.matcher(str);
+        StringBuffer sb = new StringBuffer();
+        while (matcher.find()) {
+            matcher.appendReplacement(sb, matcher.group(1).toUpperCase());
+        }
+        matcher.appendTail(sb);
+        return sb.toString();
+    }
+
+
 }
