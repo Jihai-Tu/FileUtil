@@ -48,6 +48,7 @@ import cn.hutool.core.date.DateUtil;
 import org.apache.commons.beanutils.ConvertUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.poi.hssf.usermodel.HSSFWorkbook;
+import org.apache.poi.openxml4j.opc.OPCPackage;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -57,6 +58,8 @@ import java.io.*;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -72,43 +75,66 @@ public class PoiUtils{
 
     public static <T> List<T> readExcel(Workbook wb, int sheetNo, int ignore, Class<T> tClass) throws Exception {
         Sheet hs = wb.getSheetAt(sheetNo);
-        List<T> list = new ArrayList(200);
+        List<T> resultList = new ArrayList();
         int totalRowNum = hs.getPhysicalNumberOfRows();
+        CountDownLatch countDownLatch = new CountDownLatch(totalRowNum - ignore);
         try {
             Row sheetHeader = hs.getRow(0);
             for(int rowIndex = ignore; rowIndex < totalRowNum; ++rowIndex) {
                 Row row = hs.getRow(rowIndex);
-                if (row == null) {
-                    break;
-                }
-                int cellIndex = row.getPhysicalNumberOfCells();
-                T t = tClass.newInstance();
-                for(int i = 0; i < cellIndex; ++i) {
-                    Cell cell = row.getCell(i);
-                    String cellValue = cell.getStringCellValue();
-
-                    String fileName = sheetHeader.getCell(i).getStringCellValue();
-                    Field curField = tClass.getDeclaredField(lineToHump(fileName));
-                    Class fieldTypeClass = curField.getType();
-                    if(curField == null || StringUtils.isEmpty(cellValue)){
-                        continue;
+                CompletableFuture.runAsync(()->{
+                    T t = null;
+                    try {
+                        t = readExcelRow(sheetHeader,tClass,row);
+                    } catch (Exception e) {
+                        e.printStackTrace();
                     }
-                    curField.setAccessible(true);
-                    Object value;
-                    if(fieldTypeClass.getName().equals("java.util.Date")){
-                        value = DateUtil.parse(cellValue).toJdkDate();
-                    }else {
-                        value = ConvertUtils.convert(cellValue,fieldTypeClass);
+                    countDownLatch.countDown();
+                    if(t != null){
+                        resultList.add(t);
                     }
-                    curField.set(t, value);
-                }
-                list.add(t);
+                });
             }
         } catch (Exception e) {
             throw e;
         }
-        return list;
+        countDownLatch.await();
+        return resultList;
     }
+
+    private static <T> T readExcelRow(Row sheetHeader,Class<T> tClass,Row row) throws IllegalAccessException, InstantiationException, NoSuchFieldException {
+        if (row == null) {
+            return null;
+        }
+        int cellIndex = row.getPhysicalNumberOfCells();
+        T t = tClass.newInstance();
+        for(int i = 0; i < cellIndex; ++i) {
+            Cell cell = row.getCell(i);
+            String cellValue = cell.getStringCellValue();
+            String fileName = sheetHeader.getCell(i).getStringCellValue();
+            Field curField;
+            try {
+                curField = tClass.getDeclaredField(lineToHump(fileName));
+            }catch (Exception e){
+                continue;
+            }
+
+            Class fieldTypeClass = curField.getType();
+            if(curField == null || StringUtils.isEmpty(cellValue)){
+                continue;
+            }
+            curField.setAccessible(true);
+            Object value;
+            if(fieldTypeClass.getName().equals("java.util.Date")){
+                value = DateUtil.parse(cellValue).toJdkDate();
+            }else {
+                value = ConvertUtils.convert(cellValue,fieldTypeClass);
+            }
+            curField.set(t, value);
+        }
+        return t;
+    }
+
 
     public static <T> String writeExcel(Workbook workbook, List<T> src, String path, String filename, String suffix, Class<T> tClass, List<String> header) throws IOException, IllegalAccessException {
         assert workbook != null : "workbook not be null";
@@ -227,4 +253,9 @@ public class PoiUtils{
     }
 
 
+    public static <T> List<T> readXLSX(File file, int sheetNo, int ignore, Class<T> tClass) throws Exception {
+        OPCPackage opcPackage = OPCPackage.open(file);
+        XSSFWorkbook workbook = new XSSFWorkbook(opcPackage);
+        return readExcel(workbook, sheetNo, ignore, tClass);
+    }
 }
